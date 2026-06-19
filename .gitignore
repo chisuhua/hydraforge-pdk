@@ -1,0 +1,10 @@
+# Build artifacts
+build/
+Testing/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store

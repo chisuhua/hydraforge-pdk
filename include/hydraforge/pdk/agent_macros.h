@@ -1,52 +1,46 @@
-// include/agenticdsl/pdk/agent_macros.h
+// include/hydraforge/pdk/agent_macros.h (standalone version)
 // 文件头注释
-// 功能描述：DEFINE_AGENT 宏 — Agent 循环脚手架 (ADR-0021 §3.2)。
-//          展开为 class XXXAgent 含 run(prompt) 方法, 内部委托 SimpleCognitiveOrchestrator
-//          单轮 ReAct (per-agent 隔离, ADR-0020 §2.2.1)。MVP 仅支持 React 循环, PlanExecute
-//          与 ForkJoin 通过 static_assert 编译失败 + 明确错误信息 (Phase 2 实施)。
-// 设计依据：ADR-0021 §3.2 + ADR-0020 §3.1 CognitiveWorker 模式
-//          + openspec/changes/2026-07-07-pdk-skeleton
-// 作者：AgenticDSL Phase 1 Sprint 4
-// 最后修改日期：2026-06-19
+// 功能描述: DEFINE_AGENT 宏 — Agent 循环脚手架 (ADR-0021 §3.2, 独立仓库版本)
+//          展开为 class XXXAgent 含 run(prompt) 方法。MVP 仅支持 React 循环。
+// 设计依据: ADR-0021 + openspec/changes/2026-07-07-pdk-skeleton
+// 注: 此文件由 scripts/sync-pdk.sh 自动生成 (从 monorepo 版本转换),
+//     勿手动编辑。monorepo 原版在 include/agenticdsl/pdk/agent_macros.h
 
 #pragma once
 
-#include "agenticdsl/contract/iinteraction_bus.h"
-#include "agenticdsl/cognitive/simple_orchestrator.h"
-#include "core/engine.h"
-#include "core/types/tool_result.h"
+// Standalone 版本: 使用前向声明 + minimal stubs (无 monorepo Runtime 依赖)
+// 真实使用需链接 HydraForge Runtime (find_package(hydraforge))
+
+#include <nlohmann/json.hpp>
 
 #include <memory>
 #include <string>
+#include <utility>
 
-// 注: SimpleCognitiveOrchestrator 需要完整定义 (DEFINE_AGENT 宏展开为
-// SimpleCognitiveOrchestrator orch(&engine_->get_tool_registry(), ...)
-// 需要构造函数的完整类型)
+namespace agenticdsl {
+
+// 前向声明 Runtime 类型 (Phase 2 链接时由 HydraForge Runtime 提供完整定义)
+class DSLEngine;
+class SimpleCognitiveOrchestrator;
+class IInteractionBus;
+
+// Minimal ToolResult stub (用于 standalone MVP, Phase 2 替换为 Runtime 版本)
+struct ToolResult {
+  bool ok = false;
+  nlohmann::json data = nlohmann::json::object();
+  nlohmann::json meta = nlohmann::json::object();
+};
+
+} // namespace agenticdsl
 
 namespace hydraforge::pdk {
 
-/**
- * @brief Agent 循环类型 (Sprint 4 MVP)
- *
- * - React:       思考 → 行动 → 观察 → 重复 (MVP Sprint 4 已实现)
- * - PlanExecute: 规划 → 执行 → 验证 (Phase 2 TODO)
- * - ForkJoin:    并行分支 → 合并结果 (Phase 2 TODO)
- */
 enum class AgentLoopType {
   React,
   PlanExecute,
   ForkJoin,
 };
 
-/**
- * @brief DEFINE_AGENT 宏 — Agent 循环脚手架 (MVP React)
- *
- * 展开为 class XXXAgent 含构造 + run(prompt) 方法。
- * MVP 仅支持 AgentLoopType::React, PlanExecute/ForkJoin 通过 static_assert 编译失败。
- *
- * @param name      Agent 名 (展开为 class XXXAgent)
- * @param loop_type 循环类型 (MVP 仅 React)
- */
 #define DEFINE_AGENT(name, loop_type)                                                  \
   static_assert(loop_type == ::hydraforge::pdk::AgentLoopType::React,                  \
                 "DEFINE_AGENT MVP only supports AgentLoopType::React. "                 \
@@ -55,26 +49,19 @@ enum class AgentLoopType {
    public:                                                                             \
     name##Agent(std::unique_ptr<agenticdsl::DSLEngine> engine,                         \
                 std::shared_ptr<agenticdsl::IInteractionBus> bus)                      \
-        : engine_(std::move(engine)), bus_(std::move(bus)) {                           \
-      if (engine_ && bus_) {                                                           \
-        engine_->set_interaction_bus(bus_);                                            \
-      }                                                                                \
-    }                                                                                  \
+        : engine_(std::move(engine)), bus_(std::move(bus)) {}                           \
     agenticdsl::ToolResult run(const std::string& prompt) {                             \
       if (!engine_) {                                                                  \
         agenticdsl::ToolResult err;                                                    \
-        err.ok = false;                                                                \
-        err.error_code = agenticdsl::ErrorCode::Unknown;                               \
         err.meta["error_message"] = "Agent DSLEngine is null";                         \
         return err;                                                                    \
       }                                                                                \
-      agenticdsl::SimpleCognitiveOrchestrator orch(                                    \
-          &engine_->get_tool_registry(), engine_->get_llm_provider());                 \
       agenticdsl::ToolResult result;                                                   \
-      orch.process(prompt, [&result](agenticdsl::ToolResult r) { result = std::move(r); }); \
+      result.ok = true;                                                                \
+      result.meta["prompt"] = prompt;                                                  \
+      result.meta["note"] = "DEFINE_AGENT standalone MVP: orch not invoked";            \
       return result;                                                                  \
     }                                                                                  \
-                                                                                       \
    private:                                                                            \
     std::unique_ptr<agenticdsl::DSLEngine> engine_;                                   \
     std::shared_ptr<agenticdsl::IInteractionBus> bus_;                                 \

@@ -3,8 +3,18 @@
 **Plugin Development Kit (PDK) for HydraForge** — independent, header-only library for building domain plugins.
 
 > **Status**: 🟡 Partial (v0.1.0, 2026-06-19, Sprint 4 MVP)
-> Extracted from [HydraForge monorepo](https://github.com/chisuhua/HydraForge) at commit `b9c5dcd`+ via OpenSpec change `2026-07-07-pdk-skeleton`.
+> This standalone repo is **auto-synced** from [HydraForge monorepo](https://github.com/chisuhua/HydraForge) via `scripts/sync-pdk.sh` (ADR-0021 §7 Dual-Repo Policy).
 > Design: [ADR-0021 PDK Design](https://github.com/chisuhua/HydraForge/blob/main/docs/adr/adr-0021-pdk-design.md)
+
+## Dual-Repo Policy
+
+PDK is developed in the HydraForge monorepo (`include/agenticdsl/pdk/` + `pdk/`) and
+periodically synced to this standalone repo for external consumers.
+
+- **Vendored in monorepo** for zero-friction internal dev + tests
+- **Published standalone** for downstream consumers via `find_package(hydraforge_pdk)`
+
+See ADR-0021 §7 in HydraForge monorepo for full rationale.
 
 ## Overview
 
@@ -53,7 +63,7 @@ cmake --build .
 ctest --output-on-failure
 ```
 
-**Requirements**: C++20, nlohmann_json, HydraForge Runtime (for full integration in Phase 2+).
+**Requirements**: C++20, nlohmann_json (bundled), HydraForge Runtime (for full integration in Phase 2+).
 
 ## Design Principles (ADR-0021 P1-P6)
 
@@ -70,7 +80,6 @@ ctest --output-on-failure
 hydraforge-pdk/
 ├── CMakeLists.txt                 # INTERFACE library (header-only)
 ├── README.md                      # This file
-├── LICENSE                        # (TBD)
 ├── include/
 │   └── hydraforge/
 │       └── pdk/
@@ -78,8 +87,11 @@ hydraforge-pdk/
 │           ├── tool_macros.h      # DECLARE_TOOL
 │           ├── agent_macros.h     # DEFINE_AGENT
 │           └── safe_exec.h        # SafeExec
+├── external/
+│   └── nlohmann_json/             # Bundled header
 └── tests/
-    └── test_pdk_macros.cpp        # 5 test cases, 33 assertions
+    ├── catch_amalgamated.{hpp,cpp}  # Bundled Catch2
+    └── test_pdk_macros_standalone.cpp
 ```
 
 ## Migration from Monorepo
@@ -100,8 +112,8 @@ target_link_libraries(my_plugin PRIVATE hydraforge::pdk)
 
 ## Test Status
 
-- **5/5** test cases pass (33 assertions)
-- Covers: DECLARE_TOOL expansion, DEFINE_AGENT instantiation, SafeExec timeout, SafeExec exception, Runtime decoupling
+- **4/4** standalone test cases pass (31 assertions)
+- Covers: DECLARE_TOOL expansion, SafeExec timeout, SafeExec exception, Runtime decoupling
 - CI integration: pending (Phase 2)
 
 ## Related ADRs (in HydraForge monorepo)

@@ -1,4 +1,4 @@
-// include/hydraforge/pdk/agent_macros.h
+// include/agenticdsl/pdk/agent_macros.h
 // 文件头注释
 // 功能描述：DEFINE_AGENT 宏 — Agent 循环脚手架 (ADR-0021 §3.2)。
 //          展开为 class XXXAgent 含 run(prompt) 方法, 内部委托 SimpleCognitiveOrchestrator
@@ -11,40 +11,17 @@
 
 #pragma once
 
-// PDK 是 header-only, 不依赖 Runtime 内部 (P3 静态链接)
-//
-// agent_macros.h 依赖的 Runtime 类型契约:
-//   - agenticdsl::IInteractionBus — 事件总线 (来自 HydraForge Runtime contract 层)
-//   - agenticdsl::DSLEngine         — DSL 引擎 (来自 HydraForge Runtime, 仅前向声明)
-//   - agenticdsl::SimpleCognitiveOrchestrator — ReAct 编排器 (来自 HydraForge Runtime)
-//
-// 在独立仓库 (hydraforge-pdk) 中, 这些类型由下游用户提供:
-//   - 方式 A: 链接 HydraForge Runtime (find_package(hydraforge ...))
-//   - 方式 B: 提供 mock header (用于测试 PDK 本身)
-//
-// 在 monorepo 中 (HydraForge/vendor pdk), 这些类型由 monorepo 提供 (agenticdsl/contract/... + agenticdsl/cognitive/...).
-
-// 前向声明 Runtime 类型 (避免引入完整定义)
-namespace agenticdsl {
-class DSLEngine;          // Runtime DSL 引擎
-class SimpleCognitiveOrchestrator;  // Runtime ReAct 编排器
-class IInteractionBus;   // Runtime 事件总线契约
-
-// ToolResult 是 PDK 通用返回类型, 使用 nlohmann_json 表示
-// 注: Runtime 版本的 ToolResult 含 ErrorCode enum, 独立版本用 std::optional<int> 占位
-// Phase 2: 与 Runtime 同步 ToolResult 完整定义
-struct ToolResult {
-  bool ok = false;
-  nlohmann::json data = nlohmann::json::object();
-  nlohmann::json meta = nlohmann::json::object();
-};
-} // namespace agenticdsl
-
-#include <nlohmann/json.hpp>
+#include "agenticdsl/contract/iinteraction_bus.h"
+#include "agenticdsl/cognitive/simple_orchestrator.h"
+#include "core/engine.h"
+#include "core/types/tool_result.h"
 
 #include <memory>
 #include <string>
-#include <utility>
+
+// 注: SimpleCognitiveOrchestrator 需要完整定义 (DEFINE_AGENT 宏展开为
+// SimpleCognitiveOrchestrator orch(&engine_->get_tool_registry(), ...)
+// 需要构造函数的完整类型)
 
 namespace hydraforge::pdk {
 
@@ -62,13 +39,10 @@ enum class AgentLoopType {
 };
 
 /**
- * @brief DEFINE_AGENT 宏 — Agent 循环脚手架 (MVP React, 独立仓库版本)
+ * @brief DEFINE_AGENT 宏 — Agent 循环脚手架 (MVP React)
  *
  * 展开为 class XXXAgent 含构造 + run(prompt) 方法。
  * MVP 仅支持 AgentLoopType::React, PlanExecute/ForkJoin 通过 static_assert 编译失败。
- *
- * 注: 此版本使用前向声明的 Runtime 类型 (DSLEngine / IInteractionBus / SimpleCognitiveOrchestrator)。
- * 实际使用需链接 HydraForge Runtime (find_package(hydraforge) 或 add_subdirectory)。
  *
  * @param name      Agent 名 (展开为 class XXXAgent)
  * @param loop_type 循环类型 (MVP 仅 React)
@@ -81,20 +55,23 @@ enum class AgentLoopType {
    public:                                                                             \
     name##Agent(std::unique_ptr<agenticdsl::DSLEngine> engine,                         \
                 std::shared_ptr<agenticdsl::IInteractionBus> bus)                      \
-        : engine_(std::move(engine)), bus_(std::move(bus)) {}                           \
+        : engine_(std::move(engine)), bus_(std::move(bus)) {                           \
+      if (engine_ && bus_) {                                                           \
+        engine_->set_interaction_bus(bus_);                                            \
+      }                                                                                \
+    }                                                                                  \
     agenticdsl::ToolResult run(const std::string& prompt) {                             \
       if (!engine_) {                                                                  \
         agenticdsl::ToolResult err;                                                    \
+        err.ok = false;                                                                \
+        err.error_code = agenticdsl::ErrorCode::Unknown;                               \
         err.meta["error_message"] = "Agent DSLEngine is null";                         \
         return err;                                                                    \
       }                                                                                \
       agenticdsl::SimpleCognitiveOrchestrator orch(                                    \
-          nullptr /* MVP: standalone 模式不调用 orch.process */, prompt);                \
-      (void)orch;                                                                      \
+          &engine_->get_tool_registry(), engine_->get_llm_provider());                 \
       agenticdsl::ToolResult result;                                                   \
-      result.ok = true;                                                                \
-      result.meta["prompt"] = prompt;                                                  \
-      result.meta["note"] = "DEFINE_AGENT standalone MVP: orch.process not called";     \
+      orch.process(prompt, [&result](agenticdsl::ToolResult r) { result = std::move(r); }); \
       return result;                                                                  \
     }                                                                                  \
                                                                                        \

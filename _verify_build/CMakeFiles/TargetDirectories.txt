@@ -1,0 +1,7 @@
+/tmp/hydraforge-pdk-sync/_verify_build/CMakeFiles/test.dir
+/tmp/hydraforge-pdk-sync/_verify_build/CMakeFiles/edit_cache.dir
+/tmp/hydraforge-pdk-sync/_verify_build/CMakeFiles/rebuild_cache.dir
+/tmp/hydraforge-pdk-sync/_verify_build/CMakeFiles/list_install_components.dir
+/tmp/hydraforge-pdk-sync/_verify_build/CMakeFiles/install.dir
+/tmp/hydraforge-pdk-sync/_verify_build/CMakeFiles/install/local.dir
+/tmp/hydraforge-pdk-sync/_verify_build/CMakeFiles/install/strip.dir
